@@ -1,6 +1,6 @@
 # Advent of Code 2024
 
-Run a solution with the `run.sh` script:
+This repository contains my solutions to [Advent of Code 2024](https://adventofcode.com) written in C#. Run a solution with the `run.sh` script:
 
 ```bash
 ./run.sh <day> <part>

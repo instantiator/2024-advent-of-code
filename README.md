@@ -6,6 +6,8 @@ This repository contains my solutions to [Advent of Code 2024](https://adventofc
 ./run.sh <day> <part>
 ```
 
+Data files from each day's puzzle are in: `AdventOfCode2024/Data`
+
 | Day | Part 1 | Part 2 |
 | --- | ------ | ------ |
 | 01  | 🌲     | 🎄     |

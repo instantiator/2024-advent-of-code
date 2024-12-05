@@ -12,7 +12,7 @@ Data files from each day's puzzle are in: `AdventOfCode2024/Data`
 | --- | ------ | ------ |
 | 01  | 🌲     | 🎄     |
 | 02  | 🦌     | 🦌     |
-| 03  |        |        |
+| 03  | 💾     | 💿     |
 | 04  |        |        |
 | 05  |        |        |
 | 06  |        |        |

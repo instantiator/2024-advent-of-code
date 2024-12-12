@@ -27,6 +27,7 @@ namespace AdventOfCode2024
                 1 => await new Day1().Run(part),
                 2 => await new Day2().Run(part),
                 3 => await new Day3().Run(part),
+                4 => await new Day4().Run(part),
                 _ => throw new NotImplementedException($"Day {day} not implemented")
             };
 

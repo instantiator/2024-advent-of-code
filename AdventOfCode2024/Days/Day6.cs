@@ -2,7 +2,7 @@ using AdventOfCode2024.DTO;
 
 namespace AdventOfCode2024.Days;
 
-public class Day6Guard
+public class Guard
 {
     public int Row;
     public int Col;
@@ -14,16 +14,35 @@ public class Day6Guard
         return map[theoreticalNext.Row][theoreticalNext.Col] != '#';
     }
 
-    public Day6Guard Move()
+    public Guard Move()
     {
         var dc = Direction == '>' ? 1 : Direction == '<' ? -1 : 0;
         var dr = Direction == 'v' ? 1 : Direction == '^' ? -1 : 0;
-        return new Day6Guard() { Row = Row + dr, Col = Col + dc, Direction = Direction };
+        if (dc == 0 && dr == 0) { throw new Exception("Guard direction unrecognised"); }
+        return new Guard() { Row = Row + dr, Col = Col + dc, Direction = Direction };
     }
 
-    public Day6Guard RotateClockwise()
+    public Guard RotateUntilClear(char[][] data)
     {
-        return new Day6Guard() { Row = Row, Col = Col, Direction = ClockwiseFrom(Direction) };
+        var guard = this;
+        var rotations = 0;
+        if (Day6.AtEdge(guard, data))
+        {
+            return guard;
+        }
+        while (!guard.ClearAhead(data) && rotations < 4)
+        {
+            guard = guard.RotateClockwise();
+            rotations++;
+        }
+        if (rotations == 4) { throw new Exception("Guard is trapped"); }
+        return guard;
+    }
+
+
+    public Guard RotateClockwise()
+    {
+        return new Guard() { Row = Row, Col = Col, Direction = ClockwiseFrom(Direction) };
     }
 
     public char ClockwiseFrom(char dir)
@@ -39,6 +58,11 @@ public class Day6Guard
     }
 
     public string PositionString => $"{Row},{Col}";
+
+    public bool Matches(Guard other)
+    {
+        return this.Row == other.Row && this.Col == other.Col && this.Direction == other.Direction;
+    }
 }
 
 public class Day6 : AbstractDay<char[][]>
@@ -60,62 +84,93 @@ public class Day6 : AbstractDay<char[][]>
         var nonEmpty = data.All(row => row.Length > 0);
         var sameLength = data.All(row => row.Length == data[0].Length);
         var oneStart = data.Sum(row => row.Count(c => IsDirection(c))) == 1;
-        return new Tuple<bool, string?>(nonEmpty && sameLength && oneStart, "All rows must be the same length, only 1 start position");
+        var start = FindStartRowCol(data);
+        var startOk = IsDirection(data[start.Item1][start.Item2]);
+        return new Tuple<bool, string?>(nonEmpty && sameLength && oneStart && startOk, "All rows must be the same length, only 1 start position");
+    }
+
+    private Tuple<int, int> FindStartRowCol(char[][] data)
+    {
+        var startRow = data.TakeWhile(row => row.All(c => !IsDirection(c))).Count();
+        var startCol = data[startRow].TakeWhile(c => !IsDirection(c)).Count();
+        return new Tuple<int, int>(startRow, startCol);
+    }
+
+    private struct PathCrossCheckResult
+    {
+        public IEnumerable<Guard> Path;
+        public bool CrossesPrevious;
+    }
+
+    private PathCrossCheckResult TracePath(char[][] data, Guard start, IEnumerable<Guard>? previousPath = null)
+    {
+        var current = start.RotateUntilClear(data);
+        var path = new List<Guard>();
+        if (previousPath != null) { path.AddRange(previousPath); }
+        path.Add(current);
+        while (!AtEdge(current, data))
+        {
+            current = current.Move();
+            current = current.RotateUntilClear(data);
+
+            if (previousPath != null && (path.Any(g => g.Matches(current))))
+            { 
+                return new PathCrossCheckResult() { Path = path, CrossesPrevious = true };
+            }
+
+            path.Add(current);
+        }
+        return new PathCrossCheckResult() { Path = path, CrossesPrevious = false };
     }
 
     public override async Task<PuzzleResult?> RunImplementation1(char[][] data)
     {
-        var startRow = data.TakeWhile(row => row.All(c => !IsDirection(c))).Count();
-        var startCol = data[startRow].TakeWhile(c => !IsDirection(c)).Count();
-
-        var history = new List<Day6Guard>();
-
-        var guard = new Day6Guard() { Row = startRow, Col = startCol, Direction = data[startRow][startCol] };
-        history.Add(guard);
-
-        while (!AtEdge(guard.Row, guard.Col, data))
-        {
-            while (!guard.ClearAhead(data)) { guard = guard.RotateClockwise(); }
-            guard = guard.Move();
-            history.Add(guard);
-        }
-        var distinctPositions = history.Select(g => g.PositionString).Distinct().Count();
+        var start = FindStartRowCol(data);
+        var guard = new Guard() { Row = start.Item1, Col = start.Item2, Direction = data[start.Item1][start.Item2] };
+        var path = TracePath(data, guard);
+        var distinctPositions = path.Path.Select(g => g.PositionString).Distinct().Count();
         return new PuzzleResult() { Result = distinctPositions };
     }
 
-    private bool AtEdge(int row, int col, char[][] map) => row == 0 || row == map.Length - 1 || col == 0 || col == map[0].Length - 1;
+    public static bool AtEdge(Guard guard, char[][] map)
+        => guard.Row == 0
+        || guard.Row == map.Length - 1
+        || guard.Col == 0
+        || guard.Col == map[0].Length - 1;
 
     public override async Task<PuzzleResult?> RunImplementation2(char[][] data)
     {
         // opportunities occur when:
-        // 1. a guard is crossing their own path, and
-        // 2. a single rotation would match the previous direction they were taking
+        // a single rotation would cause the guard to rejoin their path if they continue following the rules
+        // place obstacles directly in front of the guard to identify these opportunities
 
-        var startRow = data.TakeWhile(row => row.All(c => !IsDirection(c))).Count();
-        var startCol = data[startRow].TakeWhile(c => !IsDirection(c)).Count();
+        var start = FindStartRowCol(data);
+        var initial = new Guard() { Row = start.Item1, Col = start.Item2, Direction = data[start.Item1][start.Item2] };
+        var current = initial.RotateUntilClear(data);
+        var path = new List<Guard>() { current };
 
-        var history = new List<Day6Guard>();
-        var opportunities = new List<Day6Guard>();
-
-        var guard = new Day6Guard() { Row = startRow, Col = startCol, Direction = data[startRow][startCol] };
-        history.Add(guard);
-
-        while (!AtEdge(guard.Row, guard.Col, data))
+        var opportunities = new List<Guard>();
+        while (!AtEdge(current, data))
         {
-            while (!guard.ClearAhead(data)) { guard = guard.RotateClockwise(); }
-            guard = guard.Move();
-
-            // search the history for a guard that was already in this position with a single rotation
-            var afterRotation = guard.RotateClockwise();
-            if (history.Any(g => g.Col == afterRotation.Col && g.Row == afterRotation.Row && g.Direction == afterRotation.Direction))
+            var nextStep = current.Move();
+            if (data[nextStep.Row][nextStep.Col] != '#')
             {
-                opportunities.Add(guard.Move());
+                var newData = data.Select(row => row.ToArray()).ToArray();
+                newData[nextStep.Row][nextStep.Col] = '#';
+                var projected = TracePath(newData, current, path);
+                if (projected.CrossesPrevious)
+                {
+                    opportunities.Add(nextStep);
+                }
+                Console.Write(projected.CrossesPrevious ? '*' : '.');
             }
-
-            history.Add(guard);
+            
+            current = current.Move();
+            current = current.RotateUntilClear(data);
+            path.Add(current);
         }
 
-        var distinctPositions = opportunities.Select(g => g.PositionString).Distinct().Count();
-        return new PuzzleResult() { Result = distinctPositions };
+        var distinctOpportunities = opportunities.Select(g => g.PositionString).Distinct().Count();
+        return new PuzzleResult() { Result = distinctOpportunities };
     }
 }
